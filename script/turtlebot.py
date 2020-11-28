@@ -1,6 +1,7 @@
 import pybullet as p
 import pybullet_data
 import time
+from ball import *
 
 p.connect(p.GUI)
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -8,6 +9,11 @@ offset = [0,0,0]
 turtle = p.loadURDF("../model/turtlebot.urdf",offset)
 plane = p.loadURDF("plane.urdf")
 p.setRealTimeSimulation(1)
+# create elastic ball
+elastic_ball = create_elastic_ball(1.5, 1.5, 5)
+# elastic collision with the floor plane
+p.changeDynamics(plane, -1, restitution=1)
+
 
 for j in range (p.getNumJoints(turtle)):
 	print(p.getJointInfo(turtle,j))
@@ -20,7 +26,8 @@ while (1):
 	leftWheelVelocity=0
 	rightWheelVelocity=0
 	speed=10
-	
+	# print(f"ball position: {p.getBasePositionAndOrientation(elastic_ball)[0]}")
+
 	for k,v in keys.items():
 
                 if (k == p.B3G_RIGHT_ARROW and (v&p.KEY_WAS_TRIGGERED)):
