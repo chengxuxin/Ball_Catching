@@ -54,7 +54,7 @@ turtle = p.loadURDF("../model/turtlebot.urdf", offset, globalScaling=1.0)
 plane = p.loadURDF("plane.urdf")
 # p.setRealTimeSimulation(1)
 # create elastic ball
-elastic_ball = create_elastic_ball(7, 8, 3)
+elastic_ball = create_elastic_ball(8, 8, 3)
 # elastic collision with the floor plane
 p.changeDynamics(plane, -1, restitution=1)
 # p.changeDynamics(turtle, -1, restitution = 0)
@@ -65,6 +65,7 @@ for j in range(p.getNumJoints(turtle)):
 	print(p.getJointInfo(turtle, j))
 forward = 0
 turn = 0
+logId1 = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, "LOG0001.txt")
 while p.isConnected():
 	print('-------------')
 	# p.setRealTimeSimulation(1)
