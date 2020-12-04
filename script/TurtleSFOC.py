@@ -27,7 +27,7 @@ def ModelUpdate(x, u, T_s):
 # <cylinder length="0.10938" radius="0.176"/>
 
 
-def Optimalcontrol(z0, upre, xd, yd, T_lower, T_upper):
+def Optimalcontrol(z0, upre, xd, yd, T_lower, T_upper, ball_vx, ball_vy):
     '''
     '''
     # delta_T = 0.02
@@ -49,7 +49,7 @@ def Optimalcontrol(z0, upre, xd, yd, T_lower, T_upper):
     model.z = pyo.Var(model.xidx, model.tidx)
     model.u = pyo.Var(model.uidx, model.tidx)
     # object
-    model.cost = pyo.Objective(expr=sum(500*(model.z[0, t]-xd)**2 + 500*(model.z[1, t]-yd)**2 + (
+    model.cost = pyo.Objective(expr=sum(500*(model.z[0, t]-(xd + ball_vx * T_upper))**2 + 500*(model.z[1, t]-(yd + ball_vy * T_upper))**2 + (
         model.u[0, t]**2) + (model.u[1, t]**2) for t in model.tidx if t < N), sense=pyo.minimize)
     # init
     model.constraintinit1 = pyo.Constraint(
@@ -60,9 +60,9 @@ def Optimalcontrol(z0, upre, xd, yd, T_lower, T_upper):
         model.uidx, rule=lambda model, i: model.u[i, 0]-upre[i] >= -acc_boundary)
     # final
     model.constraintfinal1 = pyo.Constraint(
-        model.xidx, rule=lambda model, i: model.z[0, N] == xd)
+        model.xidx, rule=lambda model, i: model.z[0, N] == xd + ball_vx * T_upper)
     model.constraintfinal2 = pyo.Constraint(
-        model.xidx, rule=lambda model, i: model.z[1, N] == yd)
+        model.xidx, rule=lambda model, i: model.z[1, N] == yd + ball_vy * T_upper)
     # model
     model.constraintmodel1 = pyo.Constraint(model.tidx, rule=lambda model, t: model.z[0, t+1] == model.z[0, t]+delta_T*(
         (d/2)*0.5*(model.u[0, t]+model.u[1, t])*pyo.cos(model.z[2, t])) if t < N else pyo.Constraint.Skip)
@@ -189,10 +189,10 @@ def Optimalcontrol_approach(z0, upre, xd, yd, horizon):
     model.constraintboundary8 = pyo.Constraint(model.tidx, rule=lambda model, t: model.u[1, t+1]-model.u[1, t] >= -acc_boundary
                                                if t < N-1 else pyo.Constraint.Skip)
     # final velocity has to be zero
-    # model.constraint16 = pyo.Constraint(
-    #     model.uidx, rule=lambda model, i: model.u[0, N-1] == 0)
-    # model.constraint17 = pyo.Constraint(
-    #     model.uidx, rule=lambda model, i: model.u[1, N-1] == 0)
+    model.constraint16 = pyo.Constraint(
+        model.uidx, rule=lambda model, i: model.u[0, N-1] == 0)
+    model.constraint17 = pyo.Constraint(
+        model.uidx, rule=lambda model, i: model.u[1, N-1] == 0)
     solver = pyo.SolverFactory('ipopt')
     results = solver.solve(model)
     z1 = [pyo.value(model.z[0, 0])]
