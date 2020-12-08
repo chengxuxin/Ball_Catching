@@ -3,6 +3,7 @@ import pybullet_data
 import time
 from ball import *
 from TurtleSFOC import *
+import cv2
 
 bot_height = 0.4
 ball_radius = 0.1
@@ -47,13 +48,31 @@ Get the velocity of turtlebot's right and left wheels.
     turtle_pre = [turtle_right, turtle_left]
     return turtle_pre
 
+def get_ball_coord(rgb_img):
+    output_frame = rgb_img.copy()
+    captured_frame_red = cv2.inRange(rgb_img*255, np.array([40, 0, 0]), np.array([255, 100, 100]))
+    coords = np.mean(np.transpose(np.nonzero(captured_frame_red)), axis=0)
+    cv2.imshow('frame', captured_frame_red)
+    return coords.astype(np.int32)
 
 p.connect(p.GUI)
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
 offset = [0, 0, 0]
 turtle = p.loadURDF("../model/turtlebot.urdf", offset, globalScaling=1.0)
-plane = p.loadURDF("plane.urdf")
+plane = p.loadURDF("../model/plane.urdf")
 # p.setRealTimeSimulation(1)
+
+width = 128
+height = 128
+
+fov = 60
+aspect = width / height
+near = 0.02
+far = 10
+
+view_matrix = p.computeViewMatrix([-5, 0, 2.5], [0, 0, 2.5], [0, 0, 1])
+projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
+
 # create elastic ball
 elastic_ball = create_elastic_ball(2, 1.5, 1)
 # elastic collision with the floor plane
@@ -80,6 +99,24 @@ while p.isConnected():
     # NEED TO USE STEP SIMULATION
     p.stepSimulation()
     p.setTimeStep(simulation_step)
+
+    # Get depth values using the OpenGL renderer
+    images = p.getCameraImage(width,
+                              height,
+                              view_matrix,
+                              projection_matrix,
+                              shadow=True,
+                              renderer=p.ER_BULLET_HARDWARE_OPENGL)
+    rgb_opengl = np.reshape(images[2], (height, width, 4)) * 1. / 255.
+    depth_buffer_opengl = np.reshape(images[3], [width, height])
+    depth_opengl = far * near / (far - (far - near) * depth_buffer_opengl)
+    seg_opengl = np.reshape(images[4], [width, height]) * 1. / 255.
+    # get estimated ball x coordinate
+    img_coords = get_ball_coord(rgb_opengl[:, :, :3].astype(np.float32))
+    est_x = depth_opengl[img_coords[0], img_coords[1]] - 5
+    ball_x, ball_y, ball_z = get_ball_position(elastic_ball)
+    print(est_x, ball_x)
+
     if not force_applied:
         p.applyExternalForce(
             elastic_ball, -1, [50, 50, 0], p.getBasePositionAndOrientation(elastic_ball)[0], flags=p.WORLD_FRAME)
