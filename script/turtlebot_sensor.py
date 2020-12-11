@@ -101,7 +101,7 @@ C = np.array([[1, 0]])
 L = np.array([[1], [5]])
 L_z = np.array([[1], [14]])
 
-start_x, start_y, start_z = 1.5, 2, 1
+start_x, start_y, start_z = 1.5, 1.75, 2
 
 x_estimation, y_estimation, z_estimation = np.array(
     [[start_x], [0]]), np.array([[start_y], [0]]), np.array([[start_z], [0]])
@@ -138,7 +138,7 @@ force_applied = False
 step = 0
 true_x, true_y, true_z = [0], [0], [0]
 vel_x, vel_y, vel_z = [0], [0], [0]
-mean_x, mean_y = [0],[0]
+mean_x, mean_y = [0], [0]
 
 while p.isConnected():
     # p.setRealTimeSimulation(1)
@@ -190,7 +190,7 @@ while p.isConnected():
     else:
         x_estimation = A @ x_estimation + L @ (sensor_x - C @ x_estimation)
         y_estimation = A @ y_estimation + L @ (sensor_y - C @ y_estimation)
-        z_estimation = A @ z_estimation + L_z @ (sensor_z - C @ z_estimation) + np.array(
+        z_estimation = A @ z_estimation + L_z @ (sensor_z - C @ z_estimation) - np.array(
             [[-0.5 * global_g * 0.02**2], [-global_g * 0.02]])
 
     # dummy_vx = (estimate_x - prev_x) / 0.02
@@ -229,8 +229,6 @@ while p.isConnected():
         mean_x.append(np.mean(vel_x[-10:]))
         mean_y.append(np.mean(vel_y[-10:]))
 
-    
-
     print(f'Sensor ball X: {sensor_x}')
     print(f'Sensor ball Y: {sensor_y}')
     print(f'Sensor ball Z: {sensor_z}')
@@ -248,7 +246,7 @@ while p.isConnected():
     print(f'Ball Z Velocity: {ball_vz}')
     print(f'Estimate Z Velocity: {dummy_z}')
 
-    ball_vx, ball_vy, ball_vz = mean_x[-1], mean_y[-1], dummy_z - 1
+    ball_vx, ball_vy, ball_vz = mean_x[-1], mean_y[-1], dummy_z + 0.2
     turtle_pre = get_turtle_velocity(turtle)
     Time_limit = 2
 
@@ -351,20 +349,31 @@ while p.isConnected():
                             targetVelocity=output_left[0], force=1000)
     p.setJointMotorControl2(turtle, 1, p.VELOCITY_CONTROL,
                             targetVelocity=output_right[0], force=1000)
-    
-    # if step == 100:
-    #     plt.figure(1)
-    #     plt.plot(true_x, 'b')
-    #     plt.plot(vel_x, 'r')
-    #     plt.plot(mean_x, 'g')
-    #     plt.figure(2)
-    #     plt.plot(true_y, 'b')
-    #     plt.plot(vel_y, 'r')
-    #     plt.plot(mean_y, 'g')
-    #     plt.figure(3)
-    #     plt.plot(true_z, 'b')
-    #     plt.plot([z - 1 for z in vel_z], 'g')
-    #     plt.plot(vel_z, 'r')
-    #     plt.legend()
-    #     plt.show()
-    #     continue
+
+    if step == 127:
+        plt.figure(1)
+        plt.plot(true_x, 'b', label='True')
+        plt.plot(vel_x, 'r', label='Estimation')
+        plt.plot(mean_x, 'g', label='Mean')
+        plt.xlabel('Steps')
+        plt.ylabel('X Velocity')
+        plt.title('X Velocity over steps')
+        plt.legend()
+        plt.figure(2)
+        plt.plot(true_y, 'b', label='True')
+        plt.plot(vel_y, 'r', label='Estimation')
+        plt.plot(mean_y, 'g', label='Mean')
+        plt.xlabel('Steps')
+        plt.ylabel('Y Velocity')
+        plt.title('Y Velocity over steps')
+        plt.legend()
+        plt.figure(3)
+        plt.plot(true_z, 'b', label='True')
+        plt.plot(vel_z, 'r', label='Estimation')
+        plt.plot([z + 0.2 for z in vel_z], 'g', label='Estimation + 0.2')
+        plt.xlabel('Steps')
+        plt.ylabel('Z Velocity')
+        plt.title('Z Velocity over steps')
+        plt.legend()
+        plt.show()
+        continue

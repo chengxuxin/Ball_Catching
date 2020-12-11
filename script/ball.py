@@ -24,5 +24,5 @@ def create_elastic_ball(ball_x, ball_y, ball_z):
                      lateralFriction=0,
                      spinningFriction=0,
                      rollingFriction=0,
-                     restitution=1.05)
+                     restitution=0.8)
     return ball_id
