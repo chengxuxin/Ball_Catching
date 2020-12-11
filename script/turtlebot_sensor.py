@@ -5,7 +5,6 @@ from ball import *
 from TurtleSFOC import *
 import cv2
 import numpy as np
-import KalmanFilter
 
 bot_height = 0.4
 ball_radius = 0.1
@@ -97,14 +96,16 @@ near = 0.02
 far = 10
 
 dt = simulation_step
-F = np.array([[1, dt, 0], [0, 1, dt], [0, 0, 1]])
-H = np.array([1, 0, 0]).reshape(1, 3)
-Q = np.array([[0.05, 0.05, 0.0], [0.05, 0.05, 0.0], [0.0, 0.0, 0.0]])
-R = np.array([0.5]).reshape(1, 1)
-kf = KalmanFilter.KalmanFilter(F = F, H = H, Q = Q, R = R)
+A = np.array([[1, dt], [0, 1]])
+C = np.array([[1, 0]])
+L = np.array([[1], [5]])
+L_z = np.array([[1], [14]])
 
-x = np.linspace(-10, 10, 100)
-measurements = - (x**2 + 2*x - 2) + np.random.normal(0, 2, 100)
+start_x, start_y, start_z = 1.5, 2, 1
+
+x_estimation, y_estimation, z_estimation = np.array(
+    [[start_x], [0]]), np.array([[start_y], [0]]), np.array([[start_z], [0]])
+
 
 view_matrix_x = p.computeViewMatrix([-5, 0, 2.5], [0, 0, 2.5], [0, 0, 1])
 view_matrix_y = p.computeViewMatrix([0, -5, 2.5], [0, 0, 2.5], [0, 0, 1])
@@ -113,7 +114,7 @@ view_matrix_z = p.computeViewMatrix([2.5, 2.5, 5], [2.5, 2.5, 0], [1, 0, 0])
 projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, near, far)
 
 # create elastic ball
-elastic_ball = create_elastic_ball(2, 2, 1)
+elastic_ball = create_elastic_ball(start_x, start_y, start_z)
 # elastic_ball = create_elastic_ball(1, 3, 1)
 # elastic collision with the floor plane
 p.changeDynamics(plane, -1,
@@ -134,13 +135,19 @@ forward = 0
 turn = 0
 force_applied = False
 # logId1 = p.startStateLogging(p.STATE_LOGGING_GENERIC_ROBOT, "forward_sensor.txt")
+step = 0
+true_x, true_y, true_z = [0], [0], [0]
+vel_x, vel_y, vel_z = [0], [0], [0]
+mean_x, mean_y = [0],[0]
+
 while p.isConnected():
-    print('-------------')
     # p.setRealTimeSimulation(1)
     # time.sleep(1.)
     # NEED TO USE STEP SIMULATION
     p.stepSimulation()
     p.setTimeStep(simulation_step)
+    step = step + 1
+    print(f'----- Simulation Step {step} -----')
 
     if not force_applied:
         p.applyExternalForce(
@@ -148,6 +155,10 @@ while p.isConnected():
         force_applied = True
 
     ball_x, ball_y, ball_z = get_ball_position(elastic_ball)
+
+    print(f'True ball X: {ball_x}')
+    print(f'True ball Y: {ball_y}')
+    print(f'True ball Z: {ball_z}')
 
     # Get depth values using the OpenGL renderer
     images_x = p.getCameraImage(width,
@@ -168,29 +179,26 @@ while p.isConnected():
                                 projection_matrix,
                                 shadow=True,
                                 renderer=p.ER_BULLET_HARDWARE_OPENGL)
-
     # get estimated ball x coordinate
-    estimate_x = get_coord_from_cam(images_x)
-    estimate_y = get_coord_from_cam(images_y)
-    estimate_z = get_z_from_cam(images_z)
+    sensor_x = get_coord_from_cam(images_x)
+    sensor_y = get_coord_from_cam(images_y)
+    sensor_z = get_z_from_cam(images_z)
+
+    if step == 1:
+        x_estimation, y_estimation, z_estimation = np.array(
+            [[sensor_x], [0]]), np.array([[sensor_y], [0]]), np.array([[sensor_z], [0]])
+    else:
+        x_estimation = A @ x_estimation + L @ (sensor_x - C @ x_estimation)
+        y_estimation = A @ y_estimation + L @ (sensor_y - C @ y_estimation)
+        z_estimation = A @ z_estimation + L_z @ (sensor_z - C @ z_estimation) + np.array(
+            [[-0.5 * global_g * 0.02**2], [-global_g * 0.02]])
 
     # dummy_vx = (estimate_x - prev_x) / 0.02
     # prev_x = dummy_vx
 
-    estimate_vx = np.dot(H,  kf.predict())[0]
-    kf.update(estimate_x)
-
     # estimate_yv = (estimate_y - prev_y) / 0.02
     # prev_y = estimate_y
 
-    print(f'True ball X: {ball_x}')
-    print(f'Estimated ball X: {estimate_x}')
-
-    print(f'True ball Y: {ball_y}')
-    print(f'Estimated ball Y: {estimate_y}')
-
-    print(f'True ball Z: {ball_z}')
-    print(f'Estimated ball Z: {estimate_z}')
     # print(est_x, ball_x)
 
     start_time = time.time()
@@ -198,16 +206,49 @@ while p.isConnected():
     turtle_z0 = turtle_get_z0(turtle)
     # get ball states
     # ball_x, ball_y, ball_z = get_ball_position(elastic_ball)
-    ball_x, ball_y, ball_z = estimate_x, estimate_y, estimate_z
+    ball_x, ball_y, ball_z = x_estimation[0,
+                                          0], y_estimation[0, 0], z_estimation[0, 0]
     ball_z = ball_z - ball_radius
 
     ball_vx, ball_vy, ball_vz = p.getBaseVelocity(elastic_ball)[0]
 
-    print(f'Ball X Velocity: {ball_vx}')
-    print(f'Estimate X Velocity: {estimate_vx}')
-    # print(f'Ball Y Velocity: {ball_vy}')
-    # print(f'Estimate Y Velocity: {estimate_yv}')
+    true_x.append(ball_vx)
+    true_y.append(ball_vy)
+    true_z.append(ball_vz)
+    dummy_x, dummy_y, dummy_z = x_estimation[1,
+                                             0], y_estimation[1, 0], z_estimation[1, 0]
 
+    vel_x.append(dummy_x)
+    vel_y.append(dummy_y)
+    vel_z.append(dummy_z)
+
+    if len(vel_x) < 10:
+        mean_x.append(np.mean(vel_x))
+        mean_y.append(np.mean(vel_x))
+    else:
+        mean_x.append(np.mean(vel_x[-10:]))
+        mean_y.append(np.mean(vel_y[-10:]))
+
+    
+
+    print(f'Sensor ball X: {sensor_x}')
+    print(f'Sensor ball Y: {sensor_y}')
+    print(f'Sensor ball Z: {sensor_z}')
+
+    print(f'Estimated ball X: {ball_x}')
+    print(f'Estimated ball Y: {ball_y}')
+    print(f'Estimated ball Z: {ball_z}')
+
+    print('<------>')
+
+    print(f'Ball X Velocity: {ball_vx}')
+    print(f'Estimate X Velocity: {dummy_x}')
+    print(f'Ball Y Velocity: {ball_vy}')
+    print(f'Estimate Y Velocity: {dummy_y}')
+    print(f'Ball Z Velocity: {ball_vz}')
+    print(f'Estimate Z Velocity: {dummy_z}')
+
+    ball_vx, ball_vy, ball_vz = mean_x[-1], mean_y[-1], dummy_z - 1
     turtle_pre = get_turtle_velocity(turtle)
     Time_limit = 2
 
@@ -215,8 +256,8 @@ while p.isConnected():
         (turtle_z0[0] - (ball_x + ball_vx * Time_limit))**2 + (turtle_z0[1] - (ball_y + ball_vy * Time_limit))**2)
     turtle_velocity = np.sqrt(p.getBaseVelocity(turtle)[
         0][0] ** 2 + p.getBaseVelocity(turtle)[0][1] ** 2)
-    print(f'Ball Z Position: {ball_z}')
-    print(f'Ball Z Velocity: {ball_vz}')
+    # print(f'Ball Z Position: {ball_z}')
+    # print(f'Ball Z Velocity: {ball_vz}')
     # if the ball is still relatively far away
     if object_dist >= 2:
         print('Approaching the desired position.')
@@ -310,3 +351,20 @@ while p.isConnected():
                             targetVelocity=output_left[0], force=1000)
     p.setJointMotorControl2(turtle, 1, p.VELOCITY_CONTROL,
                             targetVelocity=output_right[0], force=1000)
+    
+    # if step == 100:
+    #     plt.figure(1)
+    #     plt.plot(true_x, 'b')
+    #     plt.plot(vel_x, 'r')
+    #     plt.plot(mean_x, 'g')
+    #     plt.figure(2)
+    #     plt.plot(true_y, 'b')
+    #     plt.plot(vel_y, 'r')
+    #     plt.plot(mean_y, 'g')
+    #     plt.figure(3)
+    #     plt.plot(true_z, 'b')
+    #     plt.plot([z - 1 for z in vel_z], 'g')
+    #     plt.plot(vel_z, 'r')
+    #     plt.legend()
+    #     plt.show()
+    #     continue
